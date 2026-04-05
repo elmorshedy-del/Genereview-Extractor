@@ -54,11 +54,12 @@ export async function groundToSidecar(frozenChapter: any, options: any) {
   });
 
   const anchors = options.anchors || [];
-  const { grounded_candidates, rejected_candidates } = finalizePhenotypeCandidates(
+  const { grounded_candidates, rejected_candidates } = await finalizePhenotypeCandidates(
     candidateRows,
     anchors,
     clinicalStructure,
-    'external_extraction'
+    'external_extraction',
+    options.apiKey
   );
 
   // 4. Produce grounded sidecar output

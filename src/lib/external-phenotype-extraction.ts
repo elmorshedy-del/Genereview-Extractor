@@ -822,7 +822,7 @@ export function toFinalizeCandidateRows(normalizedPayload: any, options: any = {
 
   return rows.map((row) => ({
     label: row.label,
-    status: row.status || (row.extraction_bucket === 'excluded' ? 'excluded' : 'present'),
+    status: row.extraction_bucket,
     category: row.category,
     details: row.details,
     extraction_bucket: row.extraction_bucket

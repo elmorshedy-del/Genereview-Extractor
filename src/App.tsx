@@ -111,14 +111,45 @@ export default function App() {
           const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(input.trim())}`);
           const data = await res.json();
           if (data.contents) {
-            const doc = new DOMParser().parseFromString(data.contents, 'text/html');
-            const mainContent = doc.querySelector('main') || doc.querySelector('#main-content') || doc.querySelector('.main-content') || doc.body;
+            let html = data.contents;
+            // Inject newlines for block elements so textContent preserves paragraphs
+            html = html.replace(/<(p|div|h[1-6]|br|li|tr)[^>]*>/gi, '\n\n');
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            // Remove non-content tags
+            doc.querySelectorAll('script, style, nav, header, footer, noscript, aside').forEach(el => el.remove());
+            
+            const mainContent = doc.querySelector('.bk-main-content') || doc.querySelector('#main-content') || doc.querySelector('main') || doc.body;
             clinicalText = mainContent.textContent || '';
             clinicalText = clinicalText.replace(/\n\s*\n/g, '\n\n').trim();
           }
         } catch (e) {
-          console.warn('Failed to fetch URL text for grounding:', e);
+          console.warn('Failed to fetch URL text for grounding via proxy:', e);
           clinicalText = '';
+        }
+
+        // Fallback to Gemini text extraction if proxy fails or returns too little text
+        if (!clinicalText || clinicalText.length < 500) {
+          console.log("Proxy fetch failed or returned little text. Falling back to Gemini text extraction...");
+          try {
+            const textRes = await ai.models.generateContent({
+              model: modelToUse,
+              contents: `Read this URL: ${input.trim()}. Output the full text of the article verbatim. Do not summarize.`,
+              config: { tools: [{ urlContext: {} }] }
+            });
+            clinicalText = textRes.text || '';
+            if (!clinicalText || clinicalText.length < 500) {
+              setError(`Extraction succeeded, but grounding failed. Gemini returned insufficient text: ${clinicalText.substring(0, 100)}...`);
+              setActiveTab('normalized');
+              setIsExtracting(false);
+              return;
+            }
+          } catch (e: any) {
+            console.warn('Gemini text extraction fallback failed:', e);
+            setError(`Extraction succeeded, but grounding failed. Gemini fallback error: ${e.message}`);
+            setActiveTab('normalized');
+            setIsExtracting(false);
+            return;
+          }
         }
       }
 
@@ -127,16 +158,20 @@ export default function App() {
         try {
           const { groundedSidecar, syntheticStructure } = await groundToSidecar(frozen, {
             clinicalText: clinicalText,
-            includeUncertain: true
+            includeUncertain: true,
+            apiKey: process.env.GEMINI_API_KEY
           });
           setGroundedSidecar(groundedSidecar);
           setSyntheticStructure(syntheticStructure);
           setActiveTab('sidecar');
-        } catch (gErr) {
+        } catch (gErr: any) {
           console.warn('Grounding sidecar failed:', gErr);
+          setError(`Extraction succeeded, but grounding failed: ${gErr.message}`);
           setActiveTab('normalized');
         }
       } else {
+        console.warn('No clinical text available for grounding.');
+        setError('Extraction succeeded, but could not fetch raw text from the URL for grounding.');
         setActiveTab('normalized');
       }
 
