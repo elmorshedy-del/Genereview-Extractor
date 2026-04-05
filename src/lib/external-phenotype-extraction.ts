@@ -13,6 +13,7 @@ const ANCILLARY_BUCKETS = [
   'imaging',
   'pathology',
   'electrophysiology',
+  'medications',
   'treatment_response',
   'clinical_test',
   'management_context',
@@ -27,6 +28,7 @@ const STANDARD_CONTEXT_METADATA_KEYS = [
   'prevalence',
   'prognosis',
   'natural_history',
+  'natural_trajectory',
   'family_risk',
   'founder_variant'
 ] as const;
@@ -80,6 +82,15 @@ const ANCILLARY_LABEL_PATTERNS: Record<Exclude<AncillaryBucket, 'other' | 'treat
     /\banalysis\b/i,
     /\bobserved on\b/i,
     /\bdetected on\b/i
+  ],
+  medications: [
+    /\bmedication\b/i,
+    /\bdrug\b/i,
+    /\bprescribed\b/i,
+    /\bdose\b/i,
+    /\bdosage\b/i,
+    /\bmg\/kg\b/i,
+    /\bpharmacologic/i
   ],
   management_context: [
     /\btreated with\b/i,
@@ -194,7 +205,10 @@ function normalizeChapter(chapterValue: any, payload: any = {}) {
       chapter_key: chapterKey,
       nbk_id: nbkId,
       title,
-      mode
+      mode,
+      source: coerceString(chapterValue.source || payload.source),
+      source_url: coerceString(chapterValue.source_url || payload.source_url),
+      last_updated: coerceString(chapterValue.last_updated || payload.last_updated)
     };
   }
 
@@ -204,7 +218,10 @@ function normalizeChapter(chapterValue: any, payload: any = {}) {
       chapter_key: coerceString(deriveChapterKey(title)),
       nbk_id: coerceString(extractNbkId(title || '')),
       title,
-      mode: coerceString(payload.mode || 'discovery')
+      mode: coerceString(payload.mode || 'discovery'),
+      source: coerceString(payload.source),
+      source_url: coerceString(payload.source_url),
+      last_updated: coerceString(payload.last_updated)
     };
   }
 
@@ -213,7 +230,10 @@ function normalizeChapter(chapterValue: any, payload: any = {}) {
     chapter_key: coerceString(payload.chapter_key || payload.chapterKey || deriveChapterKey(fallbackTitle)),
     nbk_id: coerceString(payload.nbk_id || payload.nbkId || extractNbkId(fallbackTitle || '')),
     title: fallbackTitle,
-    mode: coerceString(payload.mode || 'discovery')
+    mode: coerceString(payload.mode || 'discovery'),
+    source: coerceString(payload.source),
+    source_url: coerceString(payload.source_url),
+    last_updated: coerceString(payload.last_updated)
   };
 }
 
@@ -223,6 +243,9 @@ function normalizePhenotypeEntry(entry: any, bucket: PhenotypeBucket, inputIndex
     if (!label) return null;
     return {
       label,
+      source_quote: null,
+      trajectory: null,
+      reason: null,
       category: null,
       details: null,
       extraction_bucket: bucket,
@@ -238,6 +261,9 @@ function normalizePhenotypeEntry(entry: any, bucket: PhenotypeBucket, inputIndex
 
   return {
     label,
+    source_quote: coerceString(entry.source_quote),
+    trajectory: entry.trajectory || null,
+    reason: coerceString(entry.reason),
     category: coerceString(entry.category),
     details: coerceString(entry.details || entry.modifier || entry.context),
     extraction_bucket: bucket,
@@ -259,6 +285,9 @@ function mergeRowsByKey(rows: any[]) {
       ordered.push(next);
       continue;
     }
+    if (!existing.source_quote && row.source_quote) existing.source_quote = row.source_quote;
+    if (!existing.trajectory && row.trajectory) existing.trajectory = row.trajectory;
+    if (!existing.reason && row.reason) existing.reason = row.reason;
     if (!existing.category && row.category) existing.category = row.category;
     if (!existing.details && row.details) existing.details = row.details;
   }
@@ -323,9 +352,36 @@ function normalizeNegativeEntry(entry: any) {
 }
 
 function normalizeAncillaryEntry(entry: any) {
-  if (typeof entry === 'string') return coerceString(entry);
+  if (typeof entry === 'string') {
+    const text = coerceString(entry);
+    return text ? { finding: text } : null;
+  }
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
-  return coerceString(entry.text || entry.label || entry.finding || entry.note || entry.context || entry.name);
+
+  const finding = coerceString(entry.finding || entry.text || entry.label || entry.note || entry.context || entry.name);
+  if (!finding) return null;
+
+  return {
+    finding,
+    source_quote: coerceString(entry.source_quote),
+    trajectory: entry.trajectory || null
+  };
+}
+
+function dedupeAncillaryEntries(entries: any[]) {
+  const seen = new Set();
+  const deduped: any[] = [];
+
+  for (const entry of entries || []) {
+    const text = coerceString(entry?.finding);
+    if (!text) continue;
+    const key = normalizeText(text);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(entry);
+  }
+
+  return deduped;
 }
 
 function normalizeAncillaryEvidence(payload: any) {
@@ -333,7 +389,7 @@ function normalizeAncillaryEvidence(payload: any) {
   const source = payload?.ancillary_clinical_evidence || {};
 
   for (const bucket of ANCILLARY_BUCKETS) {
-    ancillary[bucket] = dedupeStrings(
+    ancillary[bucket] = dedupeAncillaryEntries(
       coerceArray(source?.[bucket]).map(normalizeAncillaryEntry).filter(Boolean)
     );
   }
@@ -427,6 +483,7 @@ function inferAncillaryBucket(text: string): AncillaryBucket | null {
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.imaging)) return 'imaging';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.pathology)) return 'pathology';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.electrophysiology)) return 'electrophysiology';
+  if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.medications)) return 'medications';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.clinical_test)) return 'clinical_test';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.management_context)) return 'management_context';
   return null;
@@ -489,23 +546,23 @@ function normalizeAncillaryBucketsForFinal(ancillaryEvidence: any, finalPhenotyp
   const reroutedPhenotypeLabels: string[] = [];
   const movedClinicalTestRecommendations: string[] = [];
 
-  ancillaryEvidence.imaging = dedupeStrings(ancillaryEvidence.imaging).filter((entry) => {
-    const phenotypeLabel = extractStructuralPhenotypeFromImagingEntry(entry);
+  ancillaryEvidence.imaging = dedupeAncillaryEntries(ancillaryEvidence.imaging).filter((entry) => {
+    const phenotypeLabel = extractStructuralPhenotypeFromImagingEntry(entry.finding);
     if (!phenotypeLabel) return true;
-    finalPhenotypes.present.push({ label: phenotypeLabel });
+    finalPhenotypes.present.push({ label: phenotypeLabel, source_quote: entry.source_quote, trajectory: entry.trajectory });
     reroutedPhenotypeLabels.push(phenotypeLabel);
     return false;
   });
 
-  ancillaryEvidence.clinical_test = dedupeStrings(ancillaryEvidence.clinical_test).filter((entry) => {
-    if (!isRecommendationStyleClinicalTest(entry)) return true;
+  ancillaryEvidence.clinical_test = dedupeAncillaryEntries(ancillaryEvidence.clinical_test).filter((entry) => {
+    if (!isRecommendationStyleClinicalTest(entry.finding)) return true;
     ancillaryEvidence.management_context.push(entry);
-    movedClinicalTestRecommendations.push(entry);
+    movedClinicalTestRecommendations.push(entry.finding);
     return false;
   });
 
   for (const bucket of ANCILLARY_BUCKETS) {
-    ancillaryEvidence[bucket] = dedupeStrings(ancillaryEvidence[bucket]);
+    ancillaryEvidence[bucket] = dedupeAncillaryEntries(ancillaryEvidence[bucket]);
   }
 
   finalPhenotypes.present = dedupePhenotypeLabelObjects(finalPhenotypes.present);
@@ -526,7 +583,7 @@ function normalizeAncillaryBucketsForFinal(ancillaryEvidence: any, finalPhenotyp
 
 function removeOverlappingAncillaryEntries(ancillaryEvidence: any) {
   ancillaryEvidence.imaging = dedupeByKey(ancillaryEvidence.imaging, (entry: any) => {
-    const text = normalizeText(entry);
+    const text = normalizeText(entry.finding);
     if (!text) return null;
     if (text.includes('corpus callosum')) return 'corpus_callosum_structural';
     return text;
@@ -548,36 +605,36 @@ function dedupeByKey(values: any[], keyFn: (v: any) => string | null) {
 }
 
 function normalizeTreatmentResponseEntries(entries: any[], ancillaryEvidence: any, contextNotes: string[]) {
-  const kept: string[] = [];
+  const kept: any[] = [];
 
   for (const entry of entries) {
-    const text = coerceString(entry);
+    const text = coerceString(entry.finding);
     if (!text) continue;
 
     if (matchesAnyPattern(text, EXPOSURE_OR_TRIGGER_CONTEXT_PATTERNS)) {
-      ancillaryEvidence.other.push(text);
+      ancillaryEvidence.other.push(entry);
       continue;
     }
 
     const qualifier = extractTreatmentResponseQualifier(text);
     if (qualifier) {
-      kept.push(qualifier);
+      kept.push({ ...entry, finding: qualifier });
       continue;
     }
 
     if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.management_context)) {
-      ancillaryEvidence.management_context.push(text);
+      ancillaryEvidence.management_context.push(entry);
       continue;
     }
 
     contextNotes.push(`Dropped non-qualifier treatment-response entry during finalization: ${text}`);
   }
 
-  ancillaryEvidence.treatment_response = dedupeStrings(kept);
+  ancillaryEvidence.treatment_response = dedupeAncillaryEntries(kept);
 }
 
 function normalizePhenotypeBucketsForFinal(phenotypes: any, ancillaryEvidence: any, contextNotes: string[]) {
-  const finalPhenotypes: Record<PhenotypeBucket, { label: string }[]> = {
+  const finalPhenotypes: Record<PhenotypeBucket, { label: string, source_quote?: string | null, trajectory?: any, reason?: string | null }[]> = {
     present: [],
     excluded: [],
     uncertain: []
@@ -603,12 +660,12 @@ function normalizePhenotypeBucketsForFinal(phenotypes: any, ancillaryEvidence: a
 
         const ancillaryBucket = inferAncillaryBucket(label);
         if (ancillaryBucket) {
-          ancillaryEvidence[ancillaryBucket].push(label);
+          ancillaryEvidence[ancillaryBucket].push({ finding: label, source_quote: row.source_quote, trajectory: row.trajectory });
           movedRows.push({ label, from: bucket, to: ancillaryBucket });
           continue;
         }
 
-        finalPhenotypes[bucket].push({ label });
+        finalPhenotypes[bucket].push({ label, source_quote: row.source_quote, trajectory: row.trajectory, reason: row.reason });
       }
     }
   }
@@ -634,7 +691,7 @@ function normalizePhenotypeBucketsForFinal(phenotypes: any, ancillaryEvidence: a
 
 function dedupePhenotypeLabelObjects(rows: any[]) {
   const seen = new Set();
-  const deduped: { label: string }[] = [];
+  const deduped: { label: string, source_quote?: string | null, trajectory?: any, reason?: string | null }[] = [];
 
   for (const row of rows || []) {
     const label = coerceString(row?.label);
@@ -642,7 +699,7 @@ function dedupePhenotypeLabelObjects(rows: any[]) {
     const key = normalizeText(label);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    deduped.push({ label });
+    deduped.push({ label, source_quote: row.source_quote, trajectory: row.trajectory, reason: row.reason });
   }
 
   return deduped;
@@ -670,9 +727,9 @@ function removeCrossLayerDuplicates(finalPhenotypes: any, ancillaryEvidence: any
     phenotypeKeys.has(normalizeText('agenesis of the corpus callosum'));
 
   for (const bucket of ANCILLARY_BUCKETS) {
-    ancillaryEvidence[bucket] = dedupeStrings(ancillaryEvidence[bucket]).filter(
+    ancillaryEvidence[bucket] = dedupeAncillaryEntries(ancillaryEvidence[bucket]).filter(
       (entry) => {
-        const normalizedEntry = normalizeText(entry);
+        const normalizedEntry = normalizeText(entry.finding);
         if (phenotypeKeys.has(normalizedEntry)) return false;
         if (bucket === 'imaging' && hasSpecificCorpusCallosumPhenotype && normalizedEntry.includes('corpus callosum')) {
           return false;
@@ -685,7 +742,7 @@ function removeCrossLayerDuplicates(finalPhenotypes: any, ancillaryEvidence: any
 
 function sortAncillaryBuckets(ancillaryEvidence: any) {
   for (const bucket of ANCILLARY_BUCKETS) {
-    ancillaryEvidence[bucket] = dedupeStrings(ancillaryEvidence[bucket]);
+    ancillaryEvidence[bucket] = dedupeAncillaryEntries(ancillaryEvidence[bucket]);
   }
 }
 
@@ -693,7 +750,10 @@ function buildFrozenChapter(chapter: any) {
   return {
     nbk_id: chapter.nbk_id || '',
     title: chapter.title || '',
-    mode: chapter.mode || 'discovery'
+    mode: chapter.mode || 'discovery',
+    source: chapter.source || '',
+    source_url: chapter.source_url || '',
+    last_updated: chapter.last_updated || ''
   };
 }
 
@@ -822,6 +882,9 @@ export function toFinalizeCandidateRows(normalizedPayload: any, options: any = {
 
   return rows.map((row) => ({
     label: row.label,
+    source_quote: row.source_quote,
+    trajectory: row.trajectory,
+    reason: row.reason,
     status: row.extraction_bucket,
     category: row.category,
     details: row.details,

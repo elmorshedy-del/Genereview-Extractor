@@ -77,7 +77,8 @@ export async function groundToSidecar(frozenChapter: any, options: any) {
       candidates_by_bucket: summarizeCandidateBuckets(grounded_candidates)
     },
     context_metadata: frozenChapter.context_metadata || {},
-    context_notes: frozenChapter.context_notes || []
+    context_notes: frozenChapter.context_notes || [],
+    ancillary_clinical_evidence: frozenChapter.ancillary_clinical_evidence || {}
   };
 
   // Deliverables

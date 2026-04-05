@@ -16,18 +16,54 @@ Return this exact JSON structure. Do not add, rename, or remove any top-level ke
   "chapter": {
     "nbk_id": "",
     "title": "",
-    "mode": "discovery"
+    "mode": "discovery",
+    "source": "GeneReviews",
+    "source_url": "",
+    "last_updated": ""
   },
   "phenotypes": {
-    "present": [],
-    "excluded": [],
-    "uncertain": []
+    "present": [
+      {
+        "label": "supravalvar aortic stenosis",
+        "source_quote": "Supravalvar aortic stenosis is the most common and may worsen over time",
+        "trajectory": {
+          "direction": "progressive",
+          "timing": "may worsen especially in first five years of life",
+          "transition_to": null,
+          "note": "progression more likely if moderate-to-severe and presenting in infancy"
+        }
+      }
+    ],
+    "excluded": [
+      {
+        "label": "seizures",
+        "source_quote": "Seizures have not been described in any affected individuals to date"
+      }
+    ],
+    "uncertain": [
+      {
+        "label": "cataracts",
+        "source_quote": "Cataracts have been reported in adults",
+        "reason": "reported only in adults, not well characterized"
+      }
+    ]
   },
   "ancillary_clinical_evidence": {
-    "laboratory": [],
+    "laboratory": [
+      "B cell counts normal",
+      {
+        "finding": "serum calcium levels higher than controls in all age groups",
+        "source_quote": "higher median serum calcium levels are found in all age groups",
+        "trajectory": {
+          "direction": "age_dependent_onset",
+          "timing": "clinically significant hypercalcemia typically at age <2 years; may recur in adults"
+        }
+      }
+    ],
     "imaging": [],
     "pathology": [],
     "electrophysiology": [],
+    "medications": [],
     "treatment_response": [],
     "clinical_test": [],
     "management_context": [],
@@ -43,23 +79,76 @@ Return this exact JSON structure. Do not add, rename, or remove any top-level ke
 ## FORMAT RULES
 
 ### phenotypes.present / excluded / uncertain
-Each item is an object with exactly one field:
-\`\`\`json
-{"label": "source-faithful clinical description"}
-\`\`\`
-No other fields. No \`anchor\`, \`bucket\`, \`confidence\`, \`hpo_id\`, \`frequency\`, \`onset\`, \`source\`, \`category\`, or any other key.
+Each item is an object.
+- \`label\`: source-faithful clinical description.
+- \`source_quote\`: The exact verbatim sentence or phrase from the text that supports this label. MUST be an exact, verbatim substring. Do not paraphrase.
+  **SOURCE_QUOTE RULES:** The source_quote must be a real substring from the chapter text that could be found by exact string match.
+  GOOD: "Peripheral pulmonic stenosis is common in infancy"
+  BAD: "PPS is common and improves over time" (paraphrased)
+  BAD: "cardiovascular disease... developmental delay" (ellipsis joining non-adjacent text)
+  Keep quotes SHORT — the minimum substring that contains the finding. Do not quote entire paragraphs. If the finding appears in a list ("broad forehead, bitemporal narrowing, periorbital fullness"), quote just the relevant term or the minimal list fragment.
+  Never use "..." to join non-contiguous text. If the finding appears across two sentences, quote the single sentence that most directly states the finding.
+- \`trajectory\`: (Optional) If the text describes how the phenotype changes over time (e.g., progressive, episodic, transforms, age-dependent onset), include this object.
+  - \`direction\`: **TRAJECTORY DIRECTION** must be exactly one of these seven values: \`stable\`, \`progressive\`, \`improves\`, \`episodic\`, \`transforms\`, \`age_dependent_onset\`, \`regressive\`. Do NOT use: "variable", "fluctuating", "worsening", "resolving", "declining", "mixed", or any other synonym. If none of the seven values fits, omit the trajectory entirely and describe the temporal pattern in context_notes instead.
+  - \`timing\`: When it happens or how long it takes.
+  - \`transition_to\`: If it changes into something else, what it changes into.
+  - \`note\`: Any other details about the progression.
+- \`reason\`: (Only for uncertain) Why this is considered uncertain.
 
 ### ancillary_clinical_evidence.*
-Each item is a plain string. Not an object.
-\`\`\`
-"CD8+ cells absent or extremely low, often 0%-2% of total T-cell count"
+Items can be a plain string OR an object if there is a trajectory or specific source quote to capture.
+If an object, use this format:
+\`\`\`json
+{
+  "finding": "serum calcium levels higher than controls in all age groups",
+  "source_quote": "higher median serum calcium levels are found in all age groups",
+  "trajectory": {
+    "direction": "age_dependent_onset",
+    "timing": "clinically significant hypercalcemia typically at age <2 years; may recur in adults"
+  }
+}
 \`\`\`
 
 ### context_metadata
-A flat object of key-value pairs. Standard keys: \`onset\`, \`inheritance\`, \`gene\`, \`prevalence\`, \`prognosis\`, \`natural_history\`, \`family_risk\`. You may add others if the chapter warrants (e.g., \`founder_variant\`). Values are strings.
+A flat object of key-value pairs. Standard keys: \`onset\`, \`inheritance\`, \`gene\`, \`prevalence\`, \`prognosis\`, \`natural_history\`, \`natural_trajectory\`, \`family_risk\`. You MUST populate all seven standard fields. If the chapter does not state a value, write "not stated in chapter." Do NOT fill in from general medical knowledge — only extract what the chapter text contains. If you are not certain a fact comes from the chapter, do not include it. You may add others if the chapter warrants (e.g., \`founder_variant\`). Values are strings.
 
 ### context_notes
-An array of strings. Each string is a self-contained observation, caveat, or explanation.
+An array of strings. Each string is a self-contained observation, caveat, or explanation. 
+
+Every extraction must include at minimum:
+- A DECISION note for every excluded placement
+- A DECISION note for every uncertain placement  
+- Whether genotype-phenotype correlations exist or are absent
+- Cohort size and frequency interpretation caveats
+- Any genotype-phenotype correlations the chapter describes
+- Any intrafamilial variability observations
+- Any founder variant or population-specific observations
+- Any age-dependent phenotype transitions not captured by trajectory objects
+
+Use for:
+- Genotype-phenotype correlations
+- Residual protein expression effects
+- Mechanism or compensation observations (e.g., "Syk may compensate for ZAP-70 deficiency")
+- Screening caveats
+- Reasons why a row was placed in uncertain or omitted
+- Explanations of duplicate-looking rows
+- Disease course observations not captured elsewhere
+- Cohort details
+- Facial gestalt observations
+- Caution statements
+
+---
+
+## SCHEMA STRICTNESS
+Return ONLY the keys defined in the schema. Do not add keys like "medications", "natural_trajectory", "frequency", "onset_age", "severity", or any other field not in the reference schema. If you want to capture information that has no home in the schema, put it in context_notes or the most appropriate existing ancillary bucket.
+
+The ancillary buckets are exactly: laboratory, imaging, pathology, electrophysiology, treatment_response, clinical_test, management_context, other. No others.
+
+phenotypes.present rows have: label (required), source_quote (required), trajectory (optional). No "reason" field on present rows. No "frequency" field. No "onset" field.
+
+phenotypes.uncertain rows have: label (required), source_quote (required), reason (required). No trajectory.
+
+phenotypes.excluded rows have: label (required), source_quote (required). No trajectory. No reason.
 
 ---
 
@@ -75,6 +164,13 @@ Patient-facing, clinically observable findings that a clinician would note on ex
 - persistent dermatitis, chronic eczema, rash
 - joint contractures, stiff gait, hyperactive deep tendon reflexes
 - hypercalcemia, hypothyroidism, diabetes mellitus (these are accepted clinical diagnoses, not raw lab values)
+- "sleep disorders" (clinical diagnosis)
+- "sensorineural hearing loss" (clinical diagnosis)
+- "prolonged QTc" (accepted clinical finding)
+- "attention-deficit/hyperactivity disorder" (clinical diagnosis)
+- "generalized anxiety" (clinical diagnosis)
+- "specific phobias" (clinical diagnosis)
+- "autism spectrum disorder" (clinical diagnosis)
 
 **Do NOT place here:**
 - laboratory measurements (CD4+ counts, immunoglobulin levels, TREC levels)
@@ -85,6 +181,34 @@ Patient-facing, clinically observable findings that a clinician would note on ex
 - electrophysiology findings (EEG patterns, EMG results)
 - treatment complications (GVHD from HSCT, ovarian failure from conditioning)
 - mechanism or compensation statements
+- "increased sleep latency" (polysomnographic measurement -> ancillary)
+- "decreased sleep efficiency" (polysomnographic measurement -> ancillary)
+- "detrusor overactivity observed on urodynamics" (test finding -> ancillary)
+- "absent contralateral acoustic reflexes" (audiometric finding -> ancillary)
+
+**MECHANISM CHAINS:** If the chapter describes a finding as a CONSEQUENCE of another finding using language like "leads to," "results in," "may develop," "increasing the risk for," or "secondary to," do NOT promote it to phenotypes.present. Instead, capture the causal chain in context_notes.
+Example: "the resultant increase in arterial resistance leads to elevated left heart pressure, cardiac hypertrophy, and cardiac failure"
+→ phenotypes.present: supravalvar aortic stenosis (the primary finding)
+→ context_notes: "Untreated SVAS can lead to cardiac hypertrophy, cardiac failure, myocardial ischemia, dysrhythmias, and sudden death."
+→ Do NOT create separate phenotype rows for cardiac hypertrophy, cardiac failure, myocardial ischemia, or dysrhythmias.
+The test: would this finding exist in a patient who was properly treated for the upstream cause? If no, it is a complication, not a primary disease phenotype.
+
+**MEASUREMENT vs DIAGNOSIS:** If a finding is detected by a specific test instrument and described in measurement terms, it belongs in the ancillary layer. If it is an accepted clinical diagnosis that a clinician would write in a problem list, it belongs in phenotypes.present.
+
+**BEHAVIORAL DESCRIPTORS:** Personality traits, behavioral tendencies, and cognitive profile details are NOT standalone phenotype rows unless they have an accepted clinical diagnosis or HPO term.
+Goes in context_notes as cognitive/behavioral profile description: "overfriendliness", "social disinhibition", "excessive empathy", "perseveration", "difficulty with emotional regulation", "difficulty with sensory modulation/processing", "strengths in verbal short-term memory", "extreme weakness in visuospatial construction".
+The test: would a clinician list this on a medical problem list or write a prescription/referral for it? If no, it is a behavioral descriptor, not a phenotype.
+
+**MINORITY FINDINGS:** If a finding is described with a specific prevalence in the cohort (e.g., "10%-20%", "5/24"), it belongs in phenotypes.present regardless of how low the percentage is. A finding reported in 10% of a well-characterized cohort is a real disease feature.
+Place in phenotypes.uncertain ONLY when:
+- Language is hedging: "may occur", "has been reported", "rarely described"
+- Cohort evidence is weak: single case report, single individual, anecdotal
+- Attribution is ambiguous: finding may be due to another cause (e.g., a second genetic hit)
+Example: "Autism spectrum disorder (10%-20%)" → present (specific percentage in a characterized cohort)
+Example: "Cataracts have been reported in adults" → uncertain (vague language, no frequency, poorly characterized)
+
+**DIFFERENTIAL CAUSES:** When the chapter lists multiple possible causes of a symptom (e.g., "chronic abdominal pain may be caused by gastroesophageal reflux, hiatal hernia, peptic ulcer disease, cholelithiasis, diverticulitis, ischemic bowel disease, chronic constipation, and somatization of anxiety"), extract the SYMPTOM as the phenotype row ("chronic abdominal pain") and put the differential causes in context_notes.
+Do NOT create separate phenotype rows for each listed cause UNLESS the chapter independently describes that cause as a disease feature elsewhere. If "diverticulitis" is independently described with its own prevalence and clinical detail, it gets its own row. If it only appears in a list of possible causes for another symptom, it does not.
 
 ### phenotypes.excluded
 ONLY findings the chapter explicitly states are absent, not present, or not found.
@@ -130,7 +254,7 @@ Lab-based, immunologic, flow cytometry, serologic, metabolic, and test-based mea
 - enzyme activity measurements
 
 ### ancillary_clinical_evidence.imaging
-Findings from MRI, CT, ultrasound, X-ray, or other imaging modalities.
+CLEARLY separate imaging findings. Must include findings from MRI, CT, ultrasound, X-ray, echocardiogram, or other imaging modalities.
 
 **Examples:**
 - white matter paucity on brain MRI
@@ -141,7 +265,7 @@ Findings from MRI, CT, ultrasound, X-ray, or other imaging modalities.
 - renal artery stenosis on imaging
 
 ### ancillary_clinical_evidence.pathology
-Histopathology, biopsy findings, tissue-level descriptions, autopsy findings.
+CLEARLY separate pathology findings. Must include histopathology, biopsy findings, tissue-level descriptions, cellular abnormalities, and autopsy findings.
 
 **Examples:**
 - decreased AIRE+ medullary thymic epithelial cells
@@ -158,6 +282,16 @@ EEG, EMG, NCS, ERG, ECG findings described as test results.
 - myopathic EMG pattern
 
 Note: If a finding is a clinical diagnosis (e.g., "prolonged QTc," "sensorineural hearing loss"), it goes in phenotypes.present. If it is described as a test result pattern, it goes here.
+
+### ancillary_clinical_evidence.medications
+Specific pharmacological interventions, drugs, supplements, or medications used in the management of the condition.
+
+**Examples:**
+- treated with IVIG
+- requires prophylactic antibiotics
+- prescribed anti-epileptic drugs
+- responsive to high-dose corticosteroids
+- 50 mg/kg/day supplementation
 
 ### ancillary_clinical_evidence.treatment_response
 Qualifier-only response phrases describing how a finding responds to treatment.
@@ -211,6 +345,7 @@ Anything clinically relevant that does not fit the above categories.
 
 ### context_metadata
 Structured key-value facts about the disease as a whole.
+You MUST populate all seven standard fields (onset, inheritance, gene, prevalence, prognosis, natural_history, family_risk). If the chapter does not state a value, write "not stated."
 
 **Standard keys:**
 - \`onset\`: when features typically first appear
@@ -219,12 +354,21 @@ Structured key-value facts about the disease as a whole.
 - \`prevalence\`: how common the disease is
 - \`prognosis\`: expected outcome with and without treatment
 - \`natural_history\`: how the disease evolves over time
+- \`natural_trajectory\`: Describe the expected progression of the disease over time, including developmental trajectory, lifespan, and sequence of symptom onset.
 - \`family_risk\`: recurrence risk for relatives
 - \`founder_variant\`: population-specific variants (if applicable)
 
 ### context_notes
-Array of strings. Each is a self-contained explanatory note. Use for:
+Array of strings. Each is a self-contained explanatory note. 
 
+Include at minimum:
+- A decision note for every excluded and uncertain placement
+- Whether genotype-phenotype correlations exist or are absent
+- Cohort size and any caveats about frequency estimates
+- Any observations about intrafamilial variability
+- Any founder variants or population-specific observations
+
+Use for:
 - Genotype-phenotype correlations
 - Residual protein expression effects
 - Mechanism or compensation observations (e.g., "Syk may compensate for ZAP-70 deficiency")
