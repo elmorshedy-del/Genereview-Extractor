@@ -1,0 +1,5 @@
+{
+  "name": "Genovy Phenotype Extractor",
+  "description": "Extracts structured phenotype data from GeneReviews chapters using Gemini models and a clinical normalization pipeline.",
+  "requestFramePermissions": []
+}
