@@ -13,7 +13,6 @@ const ANCILLARY_BUCKETS = [
   'imaging',
   'pathology',
   'electrophysiology',
-  'medications',
   'treatment_response',
   'clinical_test',
   'management_context',
@@ -82,15 +81,6 @@ const ANCILLARY_LABEL_PATTERNS: Record<Exclude<AncillaryBucket, 'other' | 'treat
     /\banalysis\b/i,
     /\bobserved on\b/i,
     /\bdetected on\b/i
-  ],
-  medications: [
-    /\bmedication\b/i,
-    /\bdrug\b/i,
-    /\bprescribed\b/i,
-    /\bdose\b/i,
-    /\bdosage\b/i,
-    /\bmg\/kg\b/i,
-    /\bpharmacologic/i
   ],
   management_context: [
     /\btreated with\b/i,
@@ -483,7 +473,6 @@ function inferAncillaryBucket(text: string): AncillaryBucket | null {
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.imaging)) return 'imaging';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.pathology)) return 'pathology';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.electrophysiology)) return 'electrophysiology';
-  if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.medications)) return 'medications';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.clinical_test)) return 'clinical_test';
   if (matchesAnyPattern(text, ANCILLARY_LABEL_PATTERNS.management_context)) return 'management_context';
   return null;

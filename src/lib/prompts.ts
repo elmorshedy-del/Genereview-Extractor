@@ -63,7 +63,6 @@ Return this exact JSON structure. Do not add, rename, or remove any top-level ke
     "imaging": [],
     "pathology": [],
     "electrophysiology": [],
-    "medications": [],
     "treatment_response": [],
     "clinical_test": [],
     "management_context": [],
@@ -142,7 +141,7 @@ Use for:
 ## SCHEMA STRICTNESS
 Return ONLY the keys defined in the schema. Do not add keys like "medications", "natural_trajectory", "frequency", "onset_age", "severity", or any other field not in the reference schema. If you want to capture information that has no home in the schema, put it in context_notes or the most appropriate existing ancillary bucket.
 
-The ancillary buckets are exactly: laboratory, imaging, pathology, electrophysiology, treatment_response, clinical_test, management_context, other. No others.
+The ancillary buckets are EXACTLY: laboratory, imaging, pathology, electrophysiology, treatment_response, clinical_test, management_context, other. Do NOT create a 'medications' bucket. Medication names and treatment protocols go in management_context.
 
 phenotypes.present rows have: label (required), source_quote (required), trajectory (optional). No "reason" field on present rows. No "frequency" field. No "onset" field.
 
@@ -186,7 +185,7 @@ Patient-facing, clinically observable findings that a clinician would note on ex
 - "detrusor overactivity observed on urodynamics" (test finding -> ancillary)
 - "absent contralateral acoustic reflexes" (audiometric finding -> ancillary)
 
-**MECHANISM CHAINS:** If the chapter describes a finding as a CONSEQUENCE of another finding using language like "leads to," "results in," "may develop," "increasing the risk for," or "secondary to," do NOT promote it to phenotypes.present. Instead, capture the causal chain in context_notes.
+**MECHANISM CHAINS:** If the chapter describes a finding as a CONSEQUENCE of another finding using language like "leads to," "results in," "may develop," "increasing the risk for," "secondary to," or "complications of X may include Y", do NOT promote it to phenotypes.present. Instead, capture the causal chain in context_notes.
 Example: "the resultant increase in arterial resistance leads to elevated left heart pressure, cardiac hypertrophy, and cardiac failure"
 → phenotypes.present: supravalvar aortic stenosis (the primary finding)
 → context_notes: "Untreated SVAS can lead to cardiac hypertrophy, cardiac failure, myocardial ischemia, dysrhythmias, and sudden death."
@@ -283,16 +282,6 @@ EEG, EMG, NCS, ERG, ECG findings described as test results.
 
 Note: If a finding is a clinical diagnosis (e.g., "prolonged QTc," "sensorineural hearing loss"), it goes in phenotypes.present. If it is described as a test result pattern, it goes here.
 
-### ancillary_clinical_evidence.medications
-Specific pharmacological interventions, drugs, supplements, or medications used in the management of the condition.
-
-**Examples:**
-- treated with IVIG
-- requires prophylactic antibiotics
-- prescribed anti-epileptic drugs
-- responsive to high-dose corticosteroids
-- 50 mg/kg/day supplementation
-
 ### ancillary_clinical_evidence.treatment_response
 Qualifier-only response phrases describing how a finding responds to treatment.
 
@@ -351,7 +340,7 @@ You MUST populate all seven standard fields (onset, inheritance, gene, prevalenc
 - \`onset\`: when features typically first appear
 - \`inheritance\`: mode of inheritance
 - \`gene\`: gene name, deletion region, or genomic coordinates
-- \`prevalence\`: how common the disease is
+- \`prevalence\`: how common the disease is. If you are not certain a prevalence figure appears verbatim in the chapter text, write 'not stated in chapter.' Do not use prevalence figures from training data.
 - \`prognosis\`: expected outcome with and without treatment
 - \`natural_history\`: how the disease evolves over time
 - \`natural_trajectory\`: Describe the expected progression of the disease over time, including developmental trajectory, lifespan, and sequence of symptom onset.

@@ -133,19 +133,21 @@ export default function App() {
           try {
             const textRes = await ai.models.generateContent({
               model: modelToUse,
-              contents: `Read this URL: ${input.trim()}. Output the full text of the article verbatim. Do not summarize.`,
+              contents: `Read this URL: ${input.trim()}. Please extract the full text of the following sections verbatim: "Summary", "Suggestive Findings", "Clinical Description", and "Genotype-Phenotype Correlations". Do not summarize.`,
               config: { tools: [{ urlContext: {} }] }
             });
             clinicalText = textRes.text || '';
+            console.log("Gemini fallback returned text of length:", clinicalText.length);
+            console.log("Gemini fallback text preview:", clinicalText.substring(0, 500));
             if (!clinicalText || clinicalText.length < 500) {
-              setError(`Extraction succeeded, but grounding failed. Gemini returned insufficient text: ${clinicalText.substring(0, 100)}...`);
+              setError(`Could not fetch the raw text from the URL (proxy failed and AI fallback was blocked). Please switch to "Text" input mode and copy-paste the chapter text directly.`);
               setActiveTab('normalized');
               setIsExtracting(false);
               return;
             }
           } catch (e: any) {
             console.warn('Gemini text extraction fallback failed:', e);
-            setError(`Extraction succeeded, but grounding failed. Gemini fallback error: ${e.message}`);
+            setError(`Could not fetch the raw text from the URL (AI fallback failed: ${e.message}). Please switch to "Text" input mode and copy-paste the chapter text directly.`);
             setActiveTab('normalized');
             setIsExtracting(false);
             return;
